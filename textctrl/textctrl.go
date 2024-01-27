@@ -1,6 +1,14 @@
 package textctrl
 
 // will need to implement decorator pattern for this
+
+type Decorator interface {
+}
+
+type DecoratorImpl struct {
+	component *Decorator
+}
+
 type Handler struct {
 	currMotion string
 }
