@@ -12,9 +12,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/term"
 )
 
 type EditorModel struct {
@@ -25,12 +25,13 @@ type EditorModel struct {
 	Filename        string
 	IsInsertMode    bool
 	cursor          cursor.Mode
-	viewport        viewport.Model
 	textctrl        *textctrl.Handler
+	linesDisplayed  int
 }
 
 var (
 	focusedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Background(lipgloss.Color("#3C3C3C"))
+	footerStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Background(lipgloss.Color("#3C3C3C"))
 	blurredStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	cursorStyle         = focusedStyle.Copy()
 	noStyle             = lipgloss.NewStyle()
@@ -40,6 +41,13 @@ var (
 
 const debounceDur = time.Second * 2
 const useHighPerfRender = true
+
+// try finding a way to not assign default height but actually calculate the size
+const defaultLinesDisplayed = 31
+
+type footer struct {
+	filename string
+}
 
 func NewTextInput(content string, editor *EditorModel, lineNo int) textinput.Model {
 	textinput := textinput.New()
@@ -70,36 +78,69 @@ func InitialEditorModel(filename string) EditorModel {
 		m.LinesCount++
 	}
 	m.textctrl = textctrl.NewHandler()
+	m.linesDisplayed = defaultLinesDisplayed
 	return m
 }
 
-func (m EditorModel) View() string {
+func LineView(row int, m *EditorModel, linesCountLength int) string {
 	var b strings.Builder
-	s := fmt.Sprintf("You are now viewing file %s...\n\n", m.Filename)
-	b.WriteString(s)
-	LinesCountLength := digitLength(m.LinesCount)
-	for i, line := range m.Content {
-		lineNo := m.CursorPositionY - i
-		if i == m.CursorPositionY {
-			lineNo = m.CursorPositionY + 1
-		} else if lineNo < 0 {
-			lineNo *= -1
-		}
-		lineSpacing := fmt.Sprintf("%d", lineNo)
-		digitLen := digitLength(lineNo)
-		for j := 0; j < LinesCountLength-digitLen+2; j++ {
-			lineSpacing += " "
-		}
-		if i == m.CursorPositionY {
-			lineSpacing = " " + lineSpacing
-		}
-		b.WriteString(lineSpacing)
-		b.WriteString(line.View())
-		if i < m.LinesCount-1 {
-			b.WriteRune('\n')
-		}
+	lineNo := m.CursorPositionY - row
+	if row == m.CursorPositionY {
+		lineNo = m.CursorPositionY + 1
+	} else if lineNo < 0 {
+		lineNo *= -1
+	}
+	lineSpacing := fmt.Sprintf("%d", lineNo)
+	digitLen := digitLength(lineNo)
+	for j := 0; j < linesCountLength-digitLen+2; j++ {
+		lineSpacing += " "
+	}
+	b.WriteString(lineSpacing)
+	b.WriteString(m.Content[row].View())
+	if row < m.LinesCount-1 {
+		b.WriteRune('\n')
 	}
 	return b.String()
+}
+
+func (m EditorModel) View() string {
+	var upperStr string
+	var lowerStr string
+	LinesCountLength := digitLength(m.LinesCount)
+
+	left, right := m.CursorPositionY, m.CursorPositionY+1
+	total := 0
+	for (left >= 0 || right < m.LinesCount) && total < m.linesDisplayed {
+		if left >= 0 {
+			lowerStr = LineView(left, &m, LinesCountLength) + lowerStr
+			total++
+			left--
+		}
+		if total >= m.linesDisplayed {
+			break
+		}
+		if right < m.LinesCount {
+			upperStr += LineView(right, &m, LinesCountLength)
+			total++
+			right++
+		}
+	}
+	footer := textinput.New()
+	footerValue := m.Filename
+	w, _, _ := term.GetSize(0)
+	for i := 40; i < w; i++ {
+		footerValue += " "
+	}
+	percentDone := int((float32(m.CursorPositionY) / float32(m.LinesCount)) * 100)
+	xCursorValue := m.CursorPositionX
+	if xCursorValue == math.MaxInt {
+		xCursorValue = len(m.Content[m.CursorPositionY].Value())
+	}
+	footerValue += fmt.Sprintf("%d,%d,%d%%", m.CursorPositionY+1, xCursorValue, percentDone)
+	footer.SetValue(footerValue)
+	footer.Blur()
+	footer.TextStyle = footerStyle
+	return lowerStr + upperStr + fmt.Sprintf("\n") + footer.View()
 }
 
 func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
