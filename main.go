@@ -16,8 +16,12 @@ func main() {
 		fmt.Printf("The file with the name %s does not exist\n", filename)
 	}
 
+	files := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		files[i] = filename
+	}
 	// bubbletea tui initialization
-	p := tea.NewProgram(components.InitialEditorModel(filename), tea.WithAltScreen())
+	p := tea.NewProgram(components.NewController(files), tea.WithAltScreen())
 	_, err := p.Run()
 	if err != nil {
 		log.Fatal(err)

@@ -53,6 +53,8 @@ func NewTextInput(content string, editor *EditorModel, lineNo int) textinput.Mod
 	textinput := textinput.New()
 	textinput.SetValue(content)
 	textinput.Cursor.Style = cursorStyle
+	w, _, _ := term.GetSize(0)
+	textinput.Width = w
 	if editor.CursorPositionY == lineNo {
 		textinput.SetCursor(editor.CursorPositionX)
 		textinput.TextStyle = focusedStyle
@@ -147,8 +149,6 @@ func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q":
-			return m, tea.Quit
 		case "h":
 			if m.CursorPositionX == math.MaxInt {
 				m.CursorPositionX = len(m.Content[m.CursorPositionY].Value()) - 1
