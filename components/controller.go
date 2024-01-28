@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/term"
 )
 
 type Controller struct {
@@ -35,8 +36,8 @@ func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
 
 func NewController(files []string) Controller {
 	controller := Controller{files: files, activeTab: 0}
-	controller.tabs = make([]*EditorModel, maxTabs)
-	for i := 0; i < maxTabs; i++ {
+	controller.tabs = make([]*EditorModel, len(files))
+	for i := 0; i < len(files); i++ {
 		editor := InitialEditorModel(files[i])
 		controller.tabs[i] = &editor
 	}
@@ -70,14 +71,13 @@ func (m Controller) View() string {
 			border.BottomRight = "┤"
 		}
 		style = style.Border(border)
-		renderedTabs = append(renderedTabs, style.Render(m.files[m.activeTab]))
+		renderedTabs = append(renderedTabs, style.Render(m.files[i]))
 	}
 	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
 	doc.WriteString(row)
 	doc.WriteString("\n")
-	//w, _, _ := term.GetSize(0)
-	doc.WriteString(windowStyle.Width((0)).Render(m.tabs[m.activeTab].View()))
-	//doc.WriteString(windowStyle.Width((lipgloss.Width(row) - windowStyle.GetHorizontalFrameSize())).Render(m.tabs[m.activeTab].View()))
+	_, h, _ := term.GetSize(0)
+	doc.WriteString(windowStyle.Width((0)).Height(h - 100).Render(m.tabs[m.activeTab].View()))
 
 	return docStyle.Render(doc.String())
 }
@@ -91,11 +91,10 @@ func (m Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "left":
 			m.activeTab = max(0, m.activeTab-1)
 		case "right":
-			m.activeTab = min(maxTabs-1, m.activeTab+1)
+			m.activeTab = min(len(m.files)-1, m.activeTab+1)
 		default:
 			m.tabs[m.activeTab].Update(msg)
 		}
-
 	}
 	return m, nil
 }

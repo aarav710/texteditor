@@ -1,3 +1,2 @@
 - fix sizing and dynamic layout so it fits all sizes of the terminal
-- updating the active tab after one motion
 

@@ -45,16 +45,13 @@ const useHighPerfRender = true
 // try finding a way to not assign default height but actually calculate the size
 const defaultLinesDisplayed = 31
 
-type footer struct {
-	filename string
-}
-
 func NewTextInput(content string, editor *EditorModel, lineNo int) textinput.Model {
 	textinput := textinput.New()
 	textinput.SetValue(content)
 	textinput.Cursor.Style = cursorStyle
-	w, _, _ := term.GetSize(0)
+	w, h, _ := term.GetSize(0)
 	textinput.Width = w
+	textinput.TextStyle.Height(h / defaultLinesDisplayed)
 	if editor.CursorPositionY == lineNo {
 		textinput.SetCursor(editor.CursorPositionX)
 		textinput.TextStyle = focusedStyle
@@ -105,7 +102,7 @@ func LineView(row int, m *EditorModel, linesCountLength int) string {
 	return b.String()
 }
 
-func (m EditorModel) View() string {
+func (m *EditorModel) View() string {
 	var upperStr string
 	var lowerStr string
 	LinesCountLength := digitLength(m.LinesCount)
@@ -114,7 +111,7 @@ func (m EditorModel) View() string {
 	total := 0
 	for (left >= 0 || right < m.LinesCount) && total < m.linesDisplayed {
 		if left >= 0 {
-			lowerStr = LineView(left, &m, LinesCountLength) + lowerStr
+			lowerStr = LineView(left, m, LinesCountLength) + lowerStr
 			total++
 			left--
 		}
@@ -122,7 +119,7 @@ func (m EditorModel) View() string {
 			break
 		}
 		if right < m.LinesCount {
-			upperStr += LineView(right, &m, LinesCountLength)
+			upperStr += LineView(right, m, LinesCountLength)
 			total++
 			right++
 		}
@@ -141,11 +138,12 @@ func (m EditorModel) View() string {
 	footerValue += fmt.Sprintf("%d,%d,%d%%", m.CursorPositionY+1, xCursorValue, percentDone)
 	footer.SetValue(footerValue)
 	footer.Blur()
+	footer.Width = w - 40
 	footer.TextStyle = footerStyle
 	return lowerStr + upperStr + fmt.Sprintf("\n") + footer.View()
 }
 
-func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -182,7 +180,7 @@ func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.IsInsertMode = true
 			m.LinesCount++
 			m.CursorPositionY++
-			m.Content = append(m.Content, NewTextInput("", &m, m.LinesCount))
+			m.Content = append(m.Content, NewTextInput("", m, m.LinesCount))
 		case "G":
 			newYPosition := m.LinesCount - 1
 			switchBlurToFocus(&m.Content[m.CursorPositionY], &m.Content[newYPosition])
@@ -190,6 +188,16 @@ func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Content[m.CursorPositionY].SetCursor(m.CursorPositionX)
 		case "esc", "ctrl+c":
 			m.IsInsertMode = false
+		case "ctrl+d":
+			newYPosition := min(m.LinesCount-1, m.CursorPositionY+15)
+			switchBlurToFocus(&m.Content[m.CursorPositionY], &m.Content[newYPosition])
+			m.CursorPositionY = newYPosition
+			m.Content[m.CursorPositionY].SetCursor(m.CursorPositionX)
+		case "ctrl+u":
+			newYPosition := max(0, m.CursorPositionY-15)
+			switchBlurToFocus(&m.Content[m.CursorPositionY], &m.Content[newYPosition])
+			m.CursorPositionY = newYPosition
+			m.Content[m.CursorPositionY].SetCursor(m.CursorPositionX)
 		case "0":
 			m.CursorPositionX = 0
 			m.Content[m.CursorPositionY].SetCursor(m.CursorPositionX)
@@ -217,7 +225,7 @@ func (m EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m EditorModel) Init() tea.Cmd {
+func (m *EditorModel) Init() tea.Cmd {
 	return textinput.Blink
 }
 
