@@ -38,17 +38,16 @@ func NewController(files []string) Controller {
 	controller := Controller{files: files, activeTab: 0}
 	controller.tabs = make([]*EditorModel, len(files))
 	for i := 0; i < len(files); i++ {
-		editor := InitialEditorModel(files[i])
-		controller.tabs[i] = &editor
+		controller.tabs[i] = InitialEditorModel(files[i])
 	}
 	return controller
 }
 
-func (m Controller) Init() tea.Cmd {
+func (m *Controller) Init() tea.Cmd {
 	return nil
 }
 
-func (m Controller) View() string {
+func (m *Controller) View() string {
 	doc := strings.Builder{}
 	var renderedTabs []string
 
@@ -71,7 +70,11 @@ func (m Controller) View() string {
 			border.BottomRight = "┤"
 		}
 		style = style.Border(border)
-		renderedTabs = append(renderedTabs, style.Render(m.files[i]))
+		displayName := m.tabs[i].Filename
+		if len(displayName) >= 2 && string(displayName[0]) == "." && string(displayName[1]) == "/" {
+			displayName = displayName[2:]
+		}
+		renderedTabs = append(renderedTabs, style.Render(displayName))
 	}
 	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
 	doc.WriteString(row)
@@ -82,7 +85,7 @@ func (m Controller) View() string {
 	return docStyle.Render(doc.String())
 }
 
-func (m Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {

@@ -24,6 +24,9 @@ func main() {
 	files := make([]string, 0)
 	for i := 0; i < filesCount; i++ {
 		filename := os.Args[i+1]
+		if len(filename) >= 3 && string(filename[0]) == "." && string(filename[1]) == "/" {
+			filename = filename[2:]
+		}
 		files = append(files, filename)
 		if _, err := os.Stat(filename); errors.Is(err, os.ErrNotExist) {
 			fmt.Printf("The file with the name %s does not exist\n", filename)
@@ -31,7 +34,8 @@ func main() {
 		}
 	}
 	// bubbletea tui initialization
-	p := tea.NewProgram(components.NewController(files), tea.WithAltScreen())
+	controller := components.NewController(files)
+	p := tea.NewProgram(&controller, tea.WithAltScreen())
 	_, err := p.Run()
 	if err != nil {
 		log.Fatal(err)

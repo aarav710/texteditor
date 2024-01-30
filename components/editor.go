@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"texteditor/textctrl"
-	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -27,6 +26,7 @@ type EditorModel struct {
 	cursor          cursor.Mode
 	textctrl        *textctrl.Handler
 	linesDisplayed  int
+	fileSelector    *FilePicker
 }
 
 var (
@@ -39,21 +39,18 @@ var (
 	cursorModeHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 )
 
-const debounceDur = time.Second * 2
-const useHighPerfRender = true
-
 // try finding a way to not assign default height but actually calculate the size
 const defaultLinesDisplayed = 31
 
-func NewTextInput(content string, editor *EditorModel, lineNo int) textinput.Model {
+func NewTextInput(content string, lineNo int) textinput.Model {
 	textinput := textinput.New()
 	textinput.SetValue(content)
 	textinput.Cursor.Style = cursorStyle
 	w, h, _ := term.GetSize(0)
 	textinput.Width = w
 	textinput.TextStyle.Height(h / defaultLinesDisplayed)
-	if editor.CursorPositionY == lineNo {
-		textinput.SetCursor(editor.CursorPositionX)
+	if lineNo == 0 {
+		textinput.SetCursor(0)
 		textinput.TextStyle = focusedStyle
 		textinput.Focus()
 	} else {
@@ -63,22 +60,36 @@ func NewTextInput(content string, editor *EditorModel, lineNo int) textinput.Mod
 	return textinput
 }
 
-func InitialEditorModel(filename string) EditorModel {
-	m := EditorModel{}
+func readContent(filename string) ([]textinput.Model, int) {
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatalf("The file with the name %s could not be opened\n", filename)
 	}
 	defer file.Close()
-	m.Filename = filename
 	scanner := bufio.NewScanner(file)
+	content := make([]textinput.Model, 0)
+	linesCount := 0
 	for scanner.Scan() {
-		m.Content = append(m.Content, NewTextInput(scanner.Text(), &m, m.LinesCount))
-		m.LinesCount++
+		content = append(content, NewTextInput(scanner.Text(), linesCount))
+		linesCount++
 	}
+	return content, linesCount
+}
+
+func (m *EditorModel) switchFile(filename string) {
+	m.Filename = filename
+	m.Content, m.LinesCount = readContent(m.Filename)
+}
+
+func InitialEditorModel(filename string) *EditorModel {
+	m := EditorModel{}
+	m.Filename = filename
+	m.Content, m.LinesCount = readContent(m.Filename)
 	m.textctrl = textctrl.NewHandler()
 	m.linesDisplayed = defaultLinesDisplayed
-	return m
+	fileSelecter := NewFilePicker(&m)
+	m.fileSelector = &fileSelecter
+	return &m
 }
 
 func LineView(row int, m *EditorModel, linesCountLength int) string {
@@ -103,6 +114,9 @@ func LineView(row int, m *EditorModel, linesCountLength int) string {
 }
 
 func (m *EditorModel) View() string {
+	if !m.fileSelector.quitting {
+		return m.fileSelector.View()
+	}
 	var upperStr string
 	var lowerStr string
 	LinesCountLength := digitLength(m.LinesCount)
@@ -180,14 +194,17 @@ func (m *EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.IsInsertMode = true
 			m.LinesCount++
 			m.CursorPositionY++
-			m.Content = append(m.Content, NewTextInput("", m, m.LinesCount))
 		case "G":
 			newYPosition := m.LinesCount - 1
 			switchBlurToFocus(&m.Content[m.CursorPositionY], &m.Content[newYPosition])
 			m.CursorPositionY = newYPosition
 			m.Content[m.CursorPositionY].SetCursor(m.CursorPositionX)
 		case "esc", "ctrl+c":
-			m.IsInsertMode = false
+			if !m.fileSelector.quitting {
+				m.fileSelector.quitting = true
+			} else {
+				m.IsInsertMode = false
+			}
 		case "ctrl+d":
 			newYPosition := min(m.LinesCount-1, m.CursorPositionY+15)
 			switchBlurToFocus(&m.Content[m.CursorPositionY], &m.Content[newYPosition])
@@ -214,6 +231,12 @@ func (m *EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.CursorPositionX = newCursorPositionX
 			m.Content[m.CursorPositionY].SetCursor(m.CursorPositionX)
+		case "ctrl+f":
+			m.fileSelector.quitting = false
+		case "down", "up", "enter":
+			if !m.fileSelector.quitting {
+				m.fileSelector.Update(msg)
+			}
 		default:
 			if m.textctrl.IsValidMotion() {
 				m.textctrl.ExecuteMotion()
