@@ -1,2 +1,3 @@
 - fix sizing and dynamic layout so it fits all sizes of the terminal
+- when todo.txt is accessed from file explorer, program crashes
 

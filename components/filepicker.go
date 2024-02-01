@@ -90,7 +90,10 @@ func (m *FilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down":
 			m.currIndex = min(m.currIndex+1, len(m.files)-1)
 		case "enter":
-			fileSelected := getDirectoryName(m.currDir) + "/" + m.files[m.currIndex].Name()
+			fileSelected := m.files[m.currIndex].Name()
+			if getDirectoryName(m.currDir) != "./" {
+				fileSelected = getDirectoryName(m.currDir) + "/" + m.files[m.currIndex].Name()
+			}
 			m.editor.switchFile(fileSelected)
 			m.quitting = true
 		}

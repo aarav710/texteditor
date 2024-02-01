@@ -269,3 +269,14 @@ func switchBlurToFocus(old *textinput.Model, newFocus *textinput.Model) {
 	newFocus.TextStyle = focusedStyle
 	newFocus.Cursor.TextStyle = focusedStyle
 }
+
+func getDirPath(dirs []string) string {
+	path := ""
+	for i := 0; i < len(dirs); i++ {
+		path += dirs[i]
+		if i != len(dirs)-1 {
+			path += "/"
+		}
+	}
+	return path
+}
