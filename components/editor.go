@@ -238,7 +238,9 @@ func (m *EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.fileSelector.Update(msg)
 			}
 		default:
-			if m.textctrl.IsValidMotion() {
+			if !m.fileSelector.quitting {
+				m.fileSelector.Update(msg)
+			} else if m.textctrl.IsValidMotion() {
 				m.textctrl.ExecuteMotion()
 			} else {
 				m.textctrl.AddToCurrMotion(msg.String())
@@ -268,15 +270,4 @@ func switchBlurToFocus(old *textinput.Model, newFocus *textinput.Model) {
 	newFocus.Focus()
 	newFocus.TextStyle = focusedStyle
 	newFocus.Cursor.TextStyle = focusedStyle
-}
-
-func getDirPath(dirs []string) string {
-	path := ""
-	for i := 0; i < len(dirs); i++ {
-		path += dirs[i]
-		if i != len(dirs)-1 {
-			path += "/"
-		}
-	}
-	return path
 }

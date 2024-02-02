@@ -86,6 +86,10 @@ func (m *Controller) View() string {
 }
 
 func (m *Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if !m.tabs[m.activeTab].fileSelector.quitting {
+		m.tabs[m.activeTab].fileSelector.Update(msg)
+		return m, nil
+	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {

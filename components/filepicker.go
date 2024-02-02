@@ -19,6 +19,8 @@ type FilePicker struct {
 	quitting     bool
 	editor       *EditorModel
 	currIndex    int
+	currSearch   string
+	displayFiles []string
 }
 
 var (
@@ -51,6 +53,9 @@ func NewFilePicker(editor *EditorModel) FilePicker {
 		log.Fatal(err)
 	}
 	filePicker.files = files
+	for _, file := range filePicker.files {
+		filePicker.displayFiles = append(filePicker.displayFiles, file.Name())
+	}
 	return filePicker
 }
 
@@ -65,8 +70,9 @@ func (m *FilePicker) View() string {
 	if getDirectoryName(m.currDir) != "./" {
 		s.WriteString(fmt.Sprintf("../\n"))
 	}
-	for i, file := range m.files {
-		str := fmt.Sprintf("%d. %s\n", i+1, file.Name())
+	s.WriteString(fmt.Sprintf("Search: %s\n", m.currSearch))
+	for i, file := range m.displayFiles {
+		str := fmt.Sprintf("%d. %s\n", i+1, file)
 		if i == m.currIndex {
 			fn := func(s ...string) string {
 				return selectedItemStyle.Render("> " + strings.Join(s, " "))
@@ -88,17 +94,35 @@ func (m *FilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up":
 			m.currIndex = max(m.currIndex-1, 0)
 		case "down":
-			m.currIndex = min(m.currIndex+1, len(m.files)-1)
+			m.currIndex = min(m.currIndex+1, len(m.displayFiles)-1)
 		case "enter":
-			fileSelected := m.files[m.currIndex].Name()
-			if getDirectoryName(m.currDir) != "./" {
-				fileSelected = getDirectoryName(m.currDir) + "/" + m.files[m.currIndex].Name()
+			fileSelected := m.displayFiles[m.currIndex]
+			if m.isDir(fileSelected) {
+				m.switchDir(m.currDir + fileSelected)
+			} else {
+				if getDirectoryName(m.currDir) != "./" {
+					fileSelected = getDirectoryName(m.currDir) + "/" + fileSelected
+				}
+				m.editor.switchFile(fileSelected)
+				m.quitting = true
 			}
-			m.editor.switchFile(fileSelected)
-			m.quitting = true
+		case "delete", "backspace":
+			if m.currSearch != "" {
+				m.currSearch = m.currSearch[:len(m.currSearch)-1]
+				m.displayFiles = make([]string, 0)
+				m.currIndex = 0
+				fileNames := make([]string, 0)
+				for _, file := range m.files {
+					fileNames = append(fileNames, file.Name())
+				}
+				m.displayFiles = m.FuzzySearch(m.currSearch, fileNames)
+			}
+		default:
+			m.currSearch += msg.String()
+			m.currIndex = 0
+			m.displayFiles = m.FuzzySearch(m.currSearch, m.displayFiles)
 		}
 	}
-
 	return m, nil
 }
 
@@ -108,4 +132,46 @@ func (m *FilePicker) getSelectedFile(index int) string {
 
 func (m *FilePicker) Init() tea.Cmd {
 	return nil
+}
+
+func (m *FilePicker) FuzzySearch(search string, fileNames []string) []string {
+	results := make([]string, 0)
+	for _, fileName := range fileNames {
+		i := 0
+		j := 0
+		for i < len(fileName) && j < len(search) {
+			if fileName[i] == search[j] {
+				j++
+			}
+			i++
+		}
+		if i <= len(fileName) && j == len(search) {
+			results = append(results, fileName)
+		}
+	}
+	return results
+}
+
+func (m *FilePicker) isDir(name string) bool {
+	for _, file := range m.files {
+		filename := file.Name()
+		if filename == name {
+			return file.IsDir()
+		}
+	}
+	return false
+}
+
+func (m *FilePicker) switchDir(dirName string) {
+	m.currDir = dirName
+	files, err := os.ReadDir("./" + m.currDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	m.files = files
+	m.displayFiles = make([]string, 0)
+	m.currIndex = 0
+	for _, file := range m.files {
+		m.displayFiles = append(m.displayFiles, file.Name())
+	}
 }
