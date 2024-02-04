@@ -1,5 +1,4 @@
 - fix sizing and dynamic layout so it fits all sizes of the terminal
 - make the filepicker view be able to optionally select whether the user is typing or 
     does it need to use the commands such as quitting and tab navigation in the controller instead
-- add option to go back to parent directory (double dots in the filepicker view that should not get
-  filtered out by the fuzzy searching, but do not make this present in the root folder of the controller
+- implement vim motions

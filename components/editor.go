@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"strings"
-	"texteditor/textctrl"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -16,17 +15,19 @@ import (
 	"golang.org/x/term"
 )
 
+var commands [6]string = [6]string{"enter", "down", "up", "left", "right", "backspace"}
+
 type EditorModel struct {
-	CursorPositionX int
-	CursorPositionY int
-	LinesCount      int
-	Content         []textinput.Model
-	Filename        string
-	IsInsertMode    bool
-	cursor          cursor.Mode
-	textctrl        *textctrl.Handler
-	linesDisplayed  int
-	fileSelector    *FilePicker
+	CursorPositionX   int
+	CursorPositionY   int
+	LinesCount        int
+	Content           []textinput.Model
+	Filename          string
+	IsInsertMode      bool
+	cursor            cursor.Mode
+	linesDisplayed    int
+	fileSelector      *FilePicker
+	instructionEditor string
 }
 
 var (
@@ -85,7 +86,6 @@ func InitialEditorModel(filename string) *EditorModel {
 	m := EditorModel{}
 	m.Filename = filename
 	m.Content, m.LinesCount = readContent(m.Filename)
-	m.textctrl = textctrl.NewHandler()
 	m.linesDisplayed = defaultLinesDisplayed
 	fileSelecter := NewFilePicker(&m)
 	m.fileSelector = &fileSelecter
@@ -140,6 +140,7 @@ func (m *EditorModel) View() string {
 	}
 	footer := textinput.New()
 	footerValue := m.Filename
+	footerValue += fmt.Sprintf("; %s", m.instructionEditor)
 	w, _, _ := term.GetSize(0)
 	for i := 40; i < w; i++ {
 		footerValue += " "
@@ -158,6 +159,16 @@ func (m *EditorModel) View() string {
 }
 
 func (m *EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if !m.IsInsertMode {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			isInCommands := m.isInCommands(msg.String())
+			if !isInCommands || m.instructionEditor != "" {
+				m.instructionEditor += msg.String()
+			}
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -202,6 +213,8 @@ func (m *EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc", "ctrl+c":
 			if !m.fileSelector.quitting {
 				m.fileSelector.quitting = true
+			} else if m.instructionEditor != "" {
+				m.instructionEditor = ""
 			} else {
 				m.IsInsertMode = false
 			}
@@ -236,14 +249,18 @@ func (m *EditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "up", "enter":
 			if !m.fileSelector.quitting {
 				m.fileSelector.Update(msg)
+			} else if m.IsInsertMode {
+
+			} else {
+				// change to stuff for executing the command in the instructionEditor
+				m.CursorPositionX = math.MaxInt
+				m.Content[m.CursorPositionY].SetCursor(m.CursorPositionX)
 			}
 		default:
 			if !m.fileSelector.quitting {
 				m.fileSelector.Update(msg)
-			} else if m.textctrl.IsValidMotion() {
-				m.textctrl.ExecuteMotion()
 			} else {
-				m.textctrl.AddToCurrMotion(msg.String())
+
 			}
 		}
 	}
@@ -270,4 +287,17 @@ func switchBlurToFocus(old *textinput.Model, newFocus *textinput.Model) {
 	newFocus.Focus()
 	newFocus.TextStyle = focusedStyle
 	newFocus.Cursor.TextStyle = focusedStyle
+}
+
+func (m *EditorModel) isInCommands(input string) bool {
+	if len(input) > 1 {
+		return false
+	} else if m.instructionEditor == "" {
+		for _, command := range commands {
+			if command == input {
+				return true
+			}
+		}
+	}
+	return false
 }

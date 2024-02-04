@@ -56,6 +56,9 @@ func NewFilePicker(editor *EditorModel) FilePicker {
 	for _, file := range filePicker.files {
 		filePicker.displayFiles = append(filePicker.displayFiles, file.Name())
 	}
+	if filePicker.currDir != "" {
+		filePicker.displayFiles = prepend[string](filePicker.displayFiles, "..")
+	}
 	return filePicker
 }
 
@@ -91,20 +94,31 @@ func (m *FilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "ctrl+q":
+			return m, tea.Quit
 		case "up":
 			m.currIndex = max(m.currIndex-1, 0)
 		case "down":
 			m.currIndex = min(m.currIndex+1, len(m.displayFiles)-1)
 		case "enter":
-			fileSelected := m.displayFiles[m.currIndex]
-			if m.isDir(fileSelected) {
-				m.switchDir(m.currDir + fileSelected)
+			if m.currIndex == 0 && m.currDir != "" {
+				parentDirName := m.parentDir(m.currDir)
+				m.switchDir(parentDirName)
 			} else {
-				if getDirectoryName(m.currDir) != "./" {
-					fileSelected = getDirectoryName(m.currDir) + "/" + fileSelected
+				fileSelected := m.displayFiles[m.currIndex]
+				if m.isDir(fileSelected) {
+					if m.currDir == "" {
+						m.switchDir(fileSelected)
+					} else {
+						m.switchDir(m.currDir + "/" + fileSelected)
+					}
+				} else {
+					if getDirectoryName(m.currDir) != "./" {
+						fileSelected = getDirectoryName(m.currDir) + "/" + fileSelected
+					}
+					m.editor.switchFile(fileSelected)
+					m.quitting = true
 				}
-				m.editor.switchFile(fileSelected)
-				m.quitting = true
 			}
 		case "delete", "backspace":
 			if m.currSearch != "" {
@@ -116,6 +130,9 @@ func (m *FilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					fileNames = append(fileNames, file.Name())
 				}
 				m.displayFiles = m.FuzzySearch(m.currSearch, fileNames)
+				if m.currDir != "" {
+					m.displayFiles = prepend[string](m.displayFiles, "..")
+				}
 			}
 		default:
 			m.currSearch += msg.String()
@@ -170,8 +187,32 @@ func (m *FilePicker) switchDir(dirName string) {
 	}
 	m.files = files
 	m.displayFiles = make([]string, 0)
+	if m.currDir != "" {
+		m.displayFiles = append(m.displayFiles, "..")
+	}
 	m.currIndex = 0
 	for _, file := range m.files {
 		m.displayFiles = append(m.displayFiles, file.Name())
 	}
+}
+
+func (m *FilePicker) parentDir(dirName string) string {
+	parentDir := ""
+	parts := strings.Split(dirName, "/")
+	for i := 0; i < len(parts)-1; i++ {
+		parentDir += parts[i] + "/"
+	}
+	if parentDir != "" {
+		parentDir = parentDir[:len(parentDir)-1]
+	}
+	return parentDir
+}
+
+func prepend[T any](arr []T, val T) []T {
+	result := make([]T, 0)
+	result = append(result, val)
+	for _, item := range arr {
+		result = append(result, item)
+	}
+	return result
 }

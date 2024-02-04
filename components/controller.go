@@ -93,7 +93,7 @@ func (m *Controller) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q":
+		case "ctrl+q":
 			return m, tea.Quit
 		case "left":
 			m.activeTab = max(0, m.activeTab-1)
